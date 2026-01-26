@@ -606,11 +606,16 @@ export class GuidedVoiceService {
   }
 
   private completeForm() {
+    console.log('Form completion triggered - all 7 steps completed');
     this.updateState({ isActive: false, awaitingCorrection: false });
     
-    if (this.onComplete) {
-      this.onComplete(this.state.formData);
-    }
+    // Add a small delay to show completion state
+    setTimeout(() => {
+      if (this.onComplete) {
+        console.log('Calling onComplete callback with form data:', this.state.formData);
+        this.onComplete(this.state.formData);
+      }
+    }, 500);
   }
 
   // Public API

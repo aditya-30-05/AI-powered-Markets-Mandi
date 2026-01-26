@@ -100,6 +100,21 @@ export function Header({ className, onHome }: HeaderProps) {
           <span className="hidden sm:inline">AI Demo</span>
         </button>
 
+        {/* Guided Voice Demo Button */}
+        <button 
+          onClick={() => navigate("/guided-voice-demo")}
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-xl",
+            "bg-green-500/10 text-green-600 font-medium text-sm",
+            "hover:bg-green-500/15 transition-colors tap-feedback",
+            "border border-green-500/20"
+          )}
+          title="7-Step Voice Form Demo"
+        >
+          🎤
+          <span className="hidden sm:inline">Voice Demo</span>
+        </button>
+
         {/* Help Button */}
         <button 
           className={cn(

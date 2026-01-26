@@ -14,6 +14,7 @@ interface GuidedVoiceFormProps {
   onComplete: (data: FormData) => void;
   onCancel: () => void;
   className?: string;
+  autoRedirectToPriceInsights?: boolean;
 }
 
 const FIELD_ICONS = {
@@ -43,7 +44,7 @@ const LANGUAGE_OPTIONS = [
   { code: 'marathi', name: 'Marathi', native: 'मराठी' }
 ];
 
-export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoiceFormProps) {
+export function GuidedVoiceForm({ onComplete, onCancel, className, autoRedirectToPriceInsights = false }: GuidedVoiceFormProps) {
   const { 
     state, 
     start, 
@@ -55,7 +56,8 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
     getCurrentStep,
     getCurrentQuestion,
     setWhisperApiKey,
-    processManualInput
+    processManualInput,
+    getSpeechRecognitionMode
   } = useGuidedVoice();
 
   const geoLocation = useGeolocation();
@@ -66,8 +68,23 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
   useEffect(() => {
-    setOnComplete(onComplete);
-  }, [onComplete, setOnComplete]);
+    setOnComplete((data: FormData) => {
+      console.log('GuidedVoiceForm: Form completed with data:', data);
+      
+      if (autoRedirectToPriceInsights) {
+        toast({
+          title: "Form Completed! 🎉",
+          description: "Redirecting to Price Insights...",
+        });
+        
+        setTimeout(() => {
+          onComplete(data);
+        }, 1500);
+      } else {
+        onComplete(data);
+      }
+    });
+  }, [onComplete, setOnComplete, autoRedirectToPriceInsights]);
 
   const handleStart = async () => {
     const detectedLocation = geoLocation.locationName || undefined;
@@ -96,7 +113,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
     const currentStep = getCurrentStep();
     console.log('Manual submit for step:', currentStep, 'with value:', manualInput.trim());
     
-    // Use the service's manual input processing
     processManualInput(manualInput.trim());
     
     setManualInput("");
@@ -113,7 +129,7 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
   };
 
   const getStepProgress = () => {
-    return ((state.currentState + 1) / 6) * 100; // 6 states total
+    return ((state.currentState + 1) / 6) * 100;
   };
 
   const renderFormFields = () => {
@@ -128,7 +144,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
           const value = state.formData[field as keyof FormData];
           const currentStep = getCurrentStep();
           
-          // Map current state to field name for highlighting
           const fieldMap: Record<string, string> = {
             'ASK_NAME': 'name',
             'ASK_PRODUCT': 'product',
@@ -177,7 +192,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
                 <button
                   onClick={() => {
                     if (field === 'quality') {
-                      // Show quality selector
                       const newValue = prompt(`Select quality (${QUALITY_OPTIONS.join(', ')}):`, value);
                       if (newValue && QUALITY_OPTIONS.includes(newValue as any)) {
                         handleFieldEdit(field as keyof FormData, newValue);
@@ -201,6 +215,75 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
     );
   };
 
+  // Show completion state when form is completed
+  if (!state.isActive && state.formData.name && state.formData.product && state.formData.quantity && state.formData.quality && state.formData.location) {
+    return (
+      <div className={cn("glass-card p-6", className)}>
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mx-auto mb-4">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", duration: 0.6 }}
+            >
+              ✅
+            </motion.div>
+          </div>
+          
+          <motion.h2 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-xl font-bold text-foreground mb-2"
+          >
+            All Steps Completed! 🎉
+          </motion.h2>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="text-muted-foreground mb-4"
+          >
+            {autoRedirectToPriceInsights 
+              ? "Redirecting to Price Insights..." 
+              : "Form data has been collected successfully"
+            }
+          </motion.p>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-muted/20 rounded-xl p-4 mb-4 text-left"
+          >
+            <h3 className="font-semibold text-foreground mb-2">Form Summary:</h3>
+            <div className="space-y-1 text-sm">
+              <p><strong>Name:</strong> {state.formData.name}</p>
+              <p><strong>Product:</strong> {state.formData.product}</p>
+              <p><strong>Quantity:</strong> {state.formData.quantity}</p>
+              <p><strong>Quality:</strong> {state.formData.quality}</p>
+              <p><strong>Location:</strong> {state.formData.location}</p>
+              <p><strong>Language:</strong> {state.formData.language}</p>
+            </div>
+          </motion.div>
+
+          {autoRedirectToPriceInsights && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="flex items-center justify-center gap-2 text-sm text-primary"
+            >
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span>Preparing price analysis...</span>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show initial setup screen if not active
   if (!state.isActive) {
     return (
       <div className={cn("glass-card p-6", className)}>
@@ -220,7 +303,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
             </span>
           </p>
 
-          {/* Speech Recognition Configuration */}
           <div className="mb-6 p-4 rounded-xl bg-muted/20 border border-border">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-foreground">Speech Recognition</h3>
@@ -249,7 +331,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
             )}
           </div>
 
-          {/* API Key Input */}
           <AnimatePresence>
             {showApiKeyInput && (
               <motion.div
@@ -296,6 +377,7 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
               </motion.div>
             )}
           </AnimatePresence>
+
           <div className="mb-6">
             <label className="block text-sm font-medium text-foreground mb-2">
               Select Language
@@ -322,7 +404,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
               Start Voice Form
             </button>
             
-            {/* Debug: Skip Language Step */}
             {process.env.NODE_ENV === 'development' && (
               <button
                 onClick={async () => {
@@ -348,9 +429,9 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
     );
   }
 
+  // Show active voice form interface
   return (
     <div className={cn("glass-card p-6", className)}>
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -372,7 +453,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
         </button>
       </div>
 
-      {/* Progress Bar */}
       <div className="mb-6">
         <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
           <motion.div
@@ -384,25 +464,22 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
         </div>
       </div>
 
-      {/* Debug Panel - Remove in production */}
       {process.env.NODE_ENV === 'development' && (
         <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm">
           <h4 className="font-semibold text-yellow-800 mb-2">Debug Info:</h4>
           <div className="space-y-1 text-yellow-700">
             <p><strong>Current Step:</strong> {getCurrentStep()} (Step {state.currentState + 1})</p>
             <p><strong>Language:</strong> {state.language}</p>
-            <p><strong>Speech Recognition:</strong> {getSpeechRecognitionMode() === 'whisper' ? 'Whisper Large V3' : 'Browser Web Speech API'}</p>
+            <p><strong>Speech Recognition:</strong> {state.useWhisper ? 'Whisper Large V3' : 'Browser Web Speech API'}</p>
             <p><strong>Last Transcript:</strong> "{state.lastTranscript}"</p>
             <p><strong>Is Listening:</strong> {state.isListening ? 'Yes' : 'No'}</p>
             <p><strong>Is Recording:</strong> {state.isRecording ? 'Yes' : 'No'}</p>
             <p><strong>Is Speaking:</strong> {state.isSpeaking ? 'Yes' : 'No'}</p>
             <p><strong>Is Retrying:</strong> {state.isRetrying ? 'Yes' : 'No'}</p>
-            <p><strong>Form Data:</strong> {JSON.stringify(state.formData, null, 2)}</p>
           </div>
         </div>
       )}
 
-      {/* Current Question */}
       <div className="mb-6">
         <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
           <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -422,7 +499,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
         </div>
       </div>
 
-      {/* Voice Controls */}
       <div className="mb-6">
         <div className="flex items-center justify-center gap-4">
           <button
@@ -452,7 +528,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
           </div>
         </div>
 
-        {/* Manual Input Toggle */}
         <div className="text-center mt-4">
           <button
             onClick={() => setShowManualInput(!showManualInput)}
@@ -462,7 +537,6 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
           </button>
         </div>
 
-        {/* Manual Input */}
         <AnimatePresence>
           {showManualInput && (
             <motion.div
@@ -508,10 +582,8 @@ export function GuidedVoiceForm({ onComplete, onCancel, className }: GuidedVoice
         </AnimatePresence>
       </div>
 
-      {/* Form Fields */}
       {renderFormFields()}
 
-      {/* Error Display */}
       {state.error && (
         <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
           <p className="text-sm text-destructive">{state.error}</p>

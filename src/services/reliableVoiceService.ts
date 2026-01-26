@@ -339,7 +339,7 @@ export class ReliableVoiceService {
         this.updateState({
           formData: { ...this.state.formData, location }
         });
-        await this.moveToNextStep();
+        this.completeForm();
       } else {
         await this.retryCurrentQuestion();
       }
@@ -472,7 +472,7 @@ export class ReliableVoiceService {
     const currentStep = STEPS[this.state.currentStep];
     const now = Date.now();
     if (currentStep === 'location' && this.state.formData.location && !this.state.isRetrying) {
-      await this.moveToNextStep();
+      this.completeForm();
       return;
     }
     if (currentStep === 'confirmation') {

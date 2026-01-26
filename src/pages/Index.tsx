@@ -61,8 +61,8 @@ const Index = () => {
         buyerMessage: textInput || `I want to buy ${quantity} of ${product}. What's your best price?`
       });
       
-      // Go directly to negotiation after form completion
-      setView("negotiation");
+      // Show results
+      setView("price");
     } catch (error) {
       console.error('AI processing failed:', error);
       setView("error");

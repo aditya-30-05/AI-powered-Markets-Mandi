@@ -97,7 +97,7 @@ export class MultilingualMandiAI {
       );
 
       // Step 4: Generate voice output for the counter-offer
-      const voiceOutput = await this.voiceService.generateSpeech(
+      const voiceOutput = await this.generateVoiceOutput(
         translatedCounterOffer.translatedText,
         input.vendorLanguage
       );
@@ -113,6 +113,40 @@ export class MultilingualMandiAI {
       console.error('AI processing error:', error);
       throw new Error('Failed to process vendor request');
     }
+  }
+
+  private async generateVoiceOutput(text: string, language: string): Promise<VoiceOutput | undefined> {
+    if (import.meta.env.VITE_SKIP_VOICE_OUTPUT === 'true') {
+      return undefined;
+    }
+
+    try {
+      return await this.withTimeout(
+        this.voiceService.generateSpeech(text, language),
+        1200
+      );
+    } catch (error) {
+      console.warn('Voice output skipped for speed:', error);
+      return undefined;
+    }
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`timeout after ${ms}ms`));
+      }, ms);
+
+      promise
+        .then((value) => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
   }
 }
 
