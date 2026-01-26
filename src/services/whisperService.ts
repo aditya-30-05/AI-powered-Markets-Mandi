@@ -20,8 +20,8 @@ export interface WhisperTranscriptionResponse {
 }
 
 export class WhisperService {
-  private apiUrl = import.meta.env.VITE_WHISPER_API_URL || '/api/whisper';
-  private modelName = import.meta.env.VITE_WHISPER_MODEL || 'openai/whisper-large-v3-turbo';
+  private apiBase = import.meta.env.VITE_WHISPER_API_URL || '/api/whisper';
+  private modelName = import.meta.env.VITE_WHISPER_MODEL || 'openai/whisper-large-v3';
   private apiKey: string | null = null;
 
   constructor() {
@@ -56,29 +56,56 @@ export class WhisperService {
     }
 
     try {
-      // Convert audio blob to the format expected by Hugging Face
       const audioBuffer = await request.audioBlob.arrayBuffer();
       const contentType = request.audioBlob.type || 'audio/webm';
-      
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': contentType,
-        },
-        body: audioBuffer
-      });
+      const modelFallbacks = [
+        this.modelName,
+        'openai/whisper-large-v3',
+        'openai/whisper-large-v2',
+        'openai/whisper-small'
+      ];
 
-      if (!response.ok) {
+      for (const model of modelFallbacks) {
+        const url = this.buildApiUrl(model);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': contentType,
+          },
+          body: audioBuffer
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          let transcribedText = '';
+          if (typeof result === 'string') {
+            transcribedText = result;
+          } else if (result.text) {
+            transcribedText = result.text;
+          } else if (Array.isArray(result) && result.length > 0) {
+            transcribedText = result[0].text || result[0];
+          } else {
+            return {
+              success: false,
+              text: '',
+              error: 'Unexpected response format from Whisper API'
+            };
+          }
+
+          return {
+            success: true,
+            text: transcribedText.trim(),
+            confidence: result.confidence || 0.9,
+            language: result.language || request.language
+          };
+        }
+
         const errorText = await response.text();
         console.error('Whisper API error:', response.status, errorText);
-        
-        if (response.status === 410) {
-          return {
-            success: false,
-            text: '',
-            error: `Model ${this.modelName} is unavailable. Try another model via VITE_WHISPER_MODEL.`
-          };
+
+        if (response.status === 404 || response.status === 410) {
+          continue;
         }
 
         if (response.status === 503) {
@@ -88,7 +115,7 @@ export class WhisperService {
             error: 'Model is loading, please try again in a few moments'
           };
         }
-        
+
         return {
           success: false,
           text: '',
@@ -96,32 +123,11 @@ export class WhisperService {
         };
       }
 
-      const result = await response.json();
-      
-      // Handle different response formats
-      let transcribedText = '';
-      if (typeof result === 'string') {
-        transcribedText = result;
-      } else if (result.text) {
-        transcribedText = result.text;
-      } else if (Array.isArray(result) && result.length > 0) {
-        transcribedText = result[0].text || result[0];
-      } else {
-        console.error('Unexpected Whisper response format:', result);
-        return {
-          success: false,
-          text: '',
-          error: 'Unexpected response format from Whisper API'
-        };
-      }
-
       return {
-        success: true,
-        text: transcribedText.trim(),
-        confidence: result.confidence || 0.9, // Whisper typically has high confidence
-        language: result.language || request.language
+        success: false,
+        text: '',
+        error: 'Whisper models unavailable. Try setting VITE_WHISPER_MODEL.'
       };
-
     } catch (error) {
       console.error('Whisper transcription error:', error);
       return {
@@ -130,6 +136,13 @@ export class WhisperService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+
+  private buildApiUrl(model: string): string {
+    if (this.apiBase.includes('{model}')) {
+      return this.apiBase.replace('{model}', model);
+    }
+    return `${this.apiBase}/${model}`;
   }
 
   /**

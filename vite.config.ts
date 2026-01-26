@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
           target: "https://api-inference.huggingface.co",
           changeOrigin: true,
           secure: true,
-          rewrite: () => `/models/${whisperModel}`,
+          rewrite: (path) => path.replace(/^\/api\/whisper/, "/models"),
         },
         "/api/indic-tts": {
           target: "https://bhaasha.iiit.ac.in",

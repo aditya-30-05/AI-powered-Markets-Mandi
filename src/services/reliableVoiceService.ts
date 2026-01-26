@@ -333,6 +333,16 @@ export class ReliableVoiceService {
       } else {
         await this.retryCurrentQuestion();
       }
+    } else if (currentStep === 'location') {
+      const location = this.normalizeLocation(cleanTranscript);
+      if (location) {
+        this.updateState({
+          formData: { ...this.state.formData, location }
+        });
+        await this.moveToNextStep();
+      } else {
+        await this.retryCurrentQuestion();
+      }
     } else if (currentStep === 'confirmation') {
       const isConfirmed = this.isConfirmationPositive(cleanTranscript);
       console.log('Confirmation result:', isConfirmed);
@@ -415,6 +425,19 @@ export class ReliableVoiceService {
     return null;
   }
 
+  private normalizeLocation(transcript: string): string | null {
+    const trimmed = transcript.trim();
+    if (!trimmed) return null;
+    const lower = trimmed.toLowerCase();
+    const isHere = ['here', 'yahaan', 'yahan', 'यहाँ', 'यहां', 'यहीं'].some(token =>
+      lower.includes(token)
+    );
+    if (isHere && this.state.formData.location) {
+      return this.state.formData.location;
+    }
+    return trimmed;
+  }
+
   private isConfirmationPositive(transcript: string): boolean {
     const positiveWords = [
       'yes', 'हाँ', 'हां', 'जी', 'सही', 'ठीक', 'correct', 'right', 'ok', 'okay'
@@ -448,6 +471,10 @@ export class ReliableVoiceService {
   private async speakCurrentQuestion() {
     const currentStep = STEPS[this.state.currentStep];
     const now = Date.now();
+    if (currentStep === 'location' && this.state.formData.location && !this.state.isRetrying) {
+      await this.moveToNextStep();
+      return;
+    }
     if (currentStep === 'confirmation') {
       await this.speakSummary();
     } else {
