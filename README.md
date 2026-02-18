@@ -109,6 +109,22 @@ graph LR
 - Optimized for regional accents
 
 </td>
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: App Load
+    Idle --> Recording: Long Press / Click
+    Recording --> Processing: Release / Stop
+    Processing --> TranscriptionSuccess: STT Received
+    TranscriptionSuccess --> FetchingPrices: API Call
+    FetchingPrices --> Negotiating: Data Received
+    Negotiating --> Speaking: TTS Ready
+    Speaking --> Idle: Audio Finished
+    
+    Processing --> Error: Timeout
+    Error --> Idle: Reset State
+```
+
 <td width="40%">
 
 ```typescript
@@ -179,6 +195,27 @@ interface PriceData {
 
 <br />
 
+```mermaid
+classDiagram
+    class GovernmentData {
+        +String commodity
+        +Number modalPrice
+        +String arrivalDate
+    }
+    class VendorInput {
+        +Number quantity
+        +String qualityGrade
+        +Number buyerOffer
+    }
+    class NegotiationEngine {
+        +Context buildContext()
+        +Strategy calculateCounter()
+    }
+    GovernmentData --> NegotiationEngine : Provides Fair Price
+    VendorInput --> NegotiationEngine : Provides Deal Context
+    NegotiationEngine --> LocalScript : Generates Speech
+```
+    
 ```typescript
 class NegotiationEngine {
   analyze(context: {
@@ -276,6 +313,24 @@ graph TB
 <br />
 
 ### 🔄 **Request Flow**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant V as Vendor (UI)
+    participant B as Bharat AI (Bhashini)
+    participant G as Gov API (AgMarkNet)
+    participant N as Negotiation AI
+    
+    V->>B: 🎤 Record & Send Raw Audio
+    B->>V: 📝 Return Transcription (STT)
+    V->>G: 🔍 Fetch Local Mandi Prices
+    G-->>V: 💰 Return Modal Price Data
+    V->>N: 🧠 Request Negotiation Strategy
+    N->>B: 🔀 Translate Strategy to Local Dialect
+    B->>V: 🔊 Return Audio Stream (TTS)
+    V->>V: 📻 Play Response to Vendor
+```
 
 ```typescript
 // Complete user journey in code
@@ -462,34 +517,34 @@ vercel --prod
 ```plaintext
 multilingual-mandi/
 ├── 📁 src/
-│   ├── 📁 components/          # React components
-│   │   ├── VoiceInput.tsx      # Voice recording UI
-│   │   ├── PriceDisplay.tsx    # Price visualization
-│   │   └── NegotiationChat.tsx # Negotiation interface
-│   ├── 📁 services/            # API integrations
-│   │   ├── bharatAI.ts         # Bhashini API client
-│   │   ├── agmarknet.ts        # Government API client
-│   │   └── negotiationAI.ts    # AI negotiation logic
-│   ├── 📁 hooks/               # Custom React hooks
-│   │   ├── useVoiceRecording.ts
-│   │   ├── usePriceData.ts
-│   │   └── useNegotiation.ts
-│   ├── 📁 types/               # TypeScript definitions
-│   │   ├── voice.types.ts
-│   │   ├── price.types.ts
-│   │   └── api.types.ts
-│   ├── 📁 utils/               # Helper functions
-│   │   ├── audioProcessing.ts
-│   │   ├── priceCalculator.ts
-│   │   └── languageDetector.ts
-│   └── App.tsx                 # Main application
+│   ├── 📁 components/          # UI Components
+│   │   ├── VoiceInput.tsx      # Logic for [State Machine Diagram]
+│   │   ├── PriceDisplay.tsx    # Visualization of GovernmentData
+│   │   └── NegotiationChat.tsx # User interface for the AI loop
+│   ├── 📁 services/            # API Clients
+│   │   ├── bharatAI.ts         # Bhashini STT/TTS Integration [Voice Loop Step 1, 6]
+│   │   ├── agmarknet.ts        # Gov Price API Wrapper [Voice Loop Step 3]
+│   │   └── negotiationAI.ts    # Logic for [Negotiation Engine Diagram]
+│   ├── 📁 hooks/               # State & Lifecycle
+│   │   ├── useVoiceRecording.ts # Handles Browser MediaRecorder API
+│   │   ├── usePriceData.ts     # Data fetching and caching logic
+│   │   └── useNegotiation.ts   # Connects UI to Negotiation Engine
+│   ├── 📁 types/               # TypeScript Definitions
+│   │   ├── voice.types.ts      # Enums for Audio states
+│   │   ├── price.types.ts      # Interfaces for AgMarkNet JSON
+│   │   └── api.types.ts        # Bhashini Inference schemas
+│   ├── 📁 utils/               # Logic Helpers
+│   │   ├── audioProcessing.ts  # Blob to Base64 conversion
+│   │   ├── priceCalculator.ts  # Grade-based price adjustments
+│   │   └── languageDetector.ts # Auto-detecting regional dialects
+│   └── App.tsx                 # Root component & Layout
 ├── 📁 public/
-│   ├── audio/                  # TTS audio cache
-│   └── assets/                 # Static files
-├── 📄 package.json
-├── 📄 tsconfig.json            # TypeScript config
-├── 📄 vite.config.ts           # Vite configuration
-└── 📄 README.md
+│   ├── audio/                  # Static audio assets
+│   └── assets/                 # Icons and branding
+├── 📄 .env.example             # Template for API keys
+├── 📄 package.json             # Dependencies (Vite, React, Axios)
+├── 📄 tsconfig.json            # TS compiler configuration
+└── 📄 README.md                # Project documentation
 ```
 
 <br />
