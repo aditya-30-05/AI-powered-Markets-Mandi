@@ -25,10 +25,21 @@ export function Header({ className, onHome }: HeaderProps) {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // Skip if Supabase is not configured
+      if (!supabase) {
+        setIsLoggedIn(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       setIsLoggedIn(!!session);
     };
     checkAuth();
+
+    // Skip auth listener if Supabase is not configured
+    if (!supabase) {
+      return;
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
@@ -38,6 +49,12 @@ export function Header({ className, onHome }: HeaderProps) {
   }, []);
 
   const handleLogout = async () => {
+    // Skip if Supabase is not configured
+    if (!supabase) {
+      navigate("/auth");
+      return;
+    }
+
     await supabase.auth.signOut();
     navigate("/auth");
   };
@@ -87,7 +104,7 @@ export function Header({ className, onHome }: HeaderProps) {
       {/* Right Side */}
       <div className="flex items-center gap-3">
         {/* AI Demo Button */}
-        <button 
+        <button
           onClick={() => navigate("/ai-demo")}
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-xl",
@@ -101,7 +118,7 @@ export function Header({ className, onHome }: HeaderProps) {
         </button>
 
         {/* Guided Voice Demo Button */}
-        <button 
+        <button
           onClick={() => navigate("/guided-voice-demo")}
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-xl",
@@ -116,7 +133,7 @@ export function Header({ className, onHome }: HeaderProps) {
         </button>
 
         {/* Help Button */}
-        <button 
+        <button
           className={cn(
             "w-11 h-11 rounded-2xl flex items-center justify-center",
             "text-muted-foreground hover:text-foreground",
@@ -133,7 +150,7 @@ export function Header({ className, onHome }: HeaderProps) {
         {isLoggedIn ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button 
+              <button
                 className={cn(
                   "flex items-center gap-2 pl-1 pr-3 py-1 rounded-2xl",
                   "bg-secondary/50 hover:bg-secondary",
@@ -150,8 +167,8 @@ export function Header({ className, onHome }: HeaderProps) {
                 <ChevronDown size={16} className="text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              align="end" 
+            <DropdownMenuContent
+              align="end"
               className="w-56 bg-card border border-border shadow-xl z-50"
             >
               <DropdownMenuLabel className="font-normal">
@@ -165,14 +182,14 @@ export function Header({ className, onHome }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => navigate("/onboarding")}
                 className="cursor-pointer"
               >
                 <Store className="mr-2 h-4 w-4" />
                 <span>Edit Business Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => navigate("/settings")}
                 className="cursor-pointer"
               >
@@ -180,7 +197,7 @@ export function Header({ className, onHome }: HeaderProps) {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleLogout}
                 className="cursor-pointer text-destructive focus:text-destructive"
               >
@@ -190,7 +207,7 @@ export function Header({ className, onHome }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <button 
+          <button
             onClick={() => navigate("/auth")}
             className={cn(
               "flex items-center gap-2 px-4 py-2.5 rounded-xl",

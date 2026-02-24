@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, Minus, MapPin, Plus, Sparkles, Clock, BarChart3, MessageCircle, X, Phone, MessageSquare as ChatIcon, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { mandiPriceService, PriceTrendData, TrendAnalysis } from "@/services/mandiPriceService";
+import { PriceTrendChart } from "@/components/PriceTrendChart";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +29,7 @@ interface MandiCardProps {
 function MandiCard({ name, distance, price, avgDiff, trend, onConnect }: MandiCardProps) {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
   const trendColor = trend === "up" ? "text-success" : trend === "down" ? "text-destructive" : "text-muted-foreground";
-  
+
   return (
     <div className="glass-card p-5 flex flex-col h-full">
       <div className="flex items-start justify-between mb-3">
@@ -37,15 +39,15 @@ function MandiCard({ name, distance, price, avgDiff, trend, onConnect }: MandiCa
         </div>
         <TrendIcon size={18} className={trendColor} />
       </div>
-      
+
       <div className="mb-3">
         <p className="text-2xl font-bold text-foreground">₹{price.toLocaleString()}</p>
         <p className={cn("text-xs font-medium", trendColor)}>
           {avgDiff > 0 ? "+" : ""}{avgDiff > 0 ? `₹${avgDiff}` : avgDiff < 0 ? `₹${avgDiff}` : "Matches"} {avgDiff !== 0 ? "from Avg" : "Avg"}
         </p>
       </div>
-      
-      <button 
+
+      <button
         onClick={onConnect}
         className={cn(
           "mt-auto w-full py-2.5 rounded-xl",
@@ -65,7 +67,7 @@ interface AddMandiCardProps {
 
 function AddMandiCard({ onAdd }: AddMandiCardProps) {
   return (
-    <button 
+    <button
       onClick={onAdd}
       className={cn(
         "h-full min-h-[160px] rounded-3xl",
@@ -95,7 +97,7 @@ function SentimentBar({ label, value, status, statusColor }: SentimentBarProps) 
     <div className="flex items-center gap-4">
       <span className="text-sm font-medium text-foreground w-16">{label}</span>
       <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
-        <div 
+        <div
           className={cn("h-full rounded-full transition-all duration-700", statusColor)}
           style={{ width: `${value}%` }}
         />
@@ -134,6 +136,9 @@ export function PriceInsightsPage({
   const [showRecordTrade, setShowRecordTrade] = useState(false);
   const [showBuyerConnect, setShowBuyerConnect] = useState<string | null>(null);
   const [showAddMandi, setShowAddMandi] = useState(false);
+  const [trendData, setTrendData] = useState<PriceTrendData[]>([]);
+  const [trendAnalysis, setTrendAnalysis] = useState<TrendAnalysis | null>(null);
+  const [isLoadingTrends, setIsLoadingTrends] = useState(false);
   const [tradeData, setTradeData] = useState({
     quantity: "",
     price: String(currentPrice),
@@ -145,6 +150,37 @@ export function PriceInsightsPage({
     distance: "",
     price: ""
   });
+
+  // Load price trends on component mount
+  useEffect(() => {
+    loadPriceTrends();
+  }, [productName]);
+
+  const loadPriceTrends = async () => {
+    setIsLoadingTrends(true);
+    try {
+      console.log('Loading price trends for:', productName);
+      const trends = await mandiPriceService.getPriceTrends(
+        productName.toLowerCase(),
+        'delhi',
+        7
+      );
+      console.log('Trends loaded:', trends.length, 'data points');
+      const analysis = mandiPriceService.analyzeTrend(trends);
+      console.log('Trend analysis:', analysis);
+      setTrendData(trends);
+      setTrendAnalysis(analysis);
+    } catch (error) {
+      console.error('Failed to load price trends:', error);
+      toast({
+        title: "Unable to load trends",
+        description: "Using cached data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingTrends(false);
+    }
+  };
 
   interface MandiData {
     name: string;
@@ -159,7 +195,7 @@ export function PriceInsightsPage({
 
   const priceRange = highPrice - lowPrice;
   const currentPosition = ((currentPrice - lowPrice) / priceRange) * 100;
-  
+
   const positionLabels = {
     good: { text: "Good Price to Sell", color: "text-success" },
     average: { text: "Average Market Price", color: "text-primary" },
@@ -174,8 +210,8 @@ export function PriceInsightsPage({
 
   const nearbyMandis = [...defaultMandis, ...customMandis];
 
-  // 7-day price trend data
-  const trendData = [
+  // 7-day price trend data for drawer (legacy)
+  const drawerTrendData = [
     { day: "Mon", price: 2400, volume: 120 },
     { day: "Tue", price: 2500, volume: 150 },
     { day: "Wed", price: 2450, volume: 130 },
@@ -185,8 +221,8 @@ export function PriceInsightsPage({
     { day: "Today", price: currentPrice, volume: 175 },
   ];
 
-  const maxPrice = Math.max(...trendData.map(d => d.price));
-  const minPrice = Math.min(...trendData.map(d => d.price));
+  const maxPriceDrawer = Math.max(...drawerTrendData.map(d => d.price));
+  const minPriceDrawer = Math.min(...drawerTrendData.map(d => d.price));
 
   const handleRecordTrade = () => {
     if (!tradeData.quantity || !tradeData.price) {
@@ -269,9 +305,9 @@ export function PriceInsightsPage({
             </span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setShowTrends(true)}
             className={cn(
               "flex items-center gap-2 px-4 py-2.5 rounded-xl",
@@ -282,7 +318,7 @@ export function PriceInsightsPage({
             <Clock size={16} />
             <span>View Trends</span>
           </button>
-          <button 
+          <button
             onClick={() => setShowRecordTrade(true)}
             className={cn(
               "flex items-center gap-2 px-4 py-2.5 rounded-xl",
@@ -333,7 +369,7 @@ export function PriceInsightsPage({
               <div className="flex-1 bg-success/60" />
             </div>
             {/* Current Price Indicator */}
-            <div 
+            <div
               className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-foreground shadow-lg border-4 border-background transition-all duration-700"
               style={{ left: `calc(${Math.min(Math.max(currentPosition, 5), 95)}% - 10px)` }}
             />
@@ -367,10 +403,36 @@ export function PriceInsightsPage({
             <h3 className="font-bold text-primary text-lg">AI Recommendation</h3>
           </div>
           <p className="text-foreground leading-relaxed">
-            "Market arrivals are low today. Prices are likely to hit <span className="font-bold">₹{(currentPrice + 100).toLocaleString()}</span> by evening. We recommend waiting <span className="font-bold">2 more hours</span> before selling."
+            {trendAnalysis?.recommendation ||
+              `"Market arrivals are low today. Prices are likely to hit ₹${(currentPrice + 100).toLocaleString()} by evening. We recommend waiting 2 more hours before selling."`
+            }
           </p>
         </div>
       </div>
+
+      {/* Price Trend Chart - Full Width */}
+      {isLoadingTrends && (
+        <div className="mb-8 glass-card p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading price trends...</p>
+        </div>
+      )}
+
+      {!isLoadingTrends && trendData.length > 0 && trendAnalysis && (
+        <div className="mb-8">
+          <PriceTrendChart
+            trendData={trendData}
+            analysis={trendAnalysis}
+            productName={productName}
+          />
+        </div>
+      )}
+
+      {!isLoadingTrends && trendData.length === 0 && (
+        <div className="mb-8 glass-card p-6 text-center">
+          <p className="text-muted-foreground">No trend data available for {productName}</p>
+        </div>
+      )}
 
       {/* Nearby Mandi Prices */}
       <div className="mb-8">
@@ -381,17 +443,17 @@ export function PriceInsightsPage({
             <MapPin size={16} />
           </button>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {nearbyMandis.map((mandi, i) => (
-            <MandiCard 
-              key={i} 
+            <MandiCard
+              key={i}
               name={mandi.name}
               distance={mandi.distance}
               price={mandi.price}
               avgDiff={mandi.avgDiff}
               trend={mandi.trend}
-              onConnect={() => setShowBuyerConnect(mandi.name)} 
+              onConnect={() => setShowBuyerConnect(mandi.name)}
             />
           ))}
           <AddMandiCard onAdd={() => setShowAddMandi(true)} />
@@ -419,7 +481,7 @@ export function PriceInsightsPage({
           <p className="text-muted-foreground text-sm mb-6 flex-1">
             Our AI assistant can help you negotiate with <span className="font-semibold text-foreground">12 verified buyers</span> in Azadpur Mandi right now.
           </p>
-          <button 
+          <button
             onClick={onStartNegotiation}
             className={cn(
               "w-full flex items-center justify-center gap-3 py-4 rounded-xl",
@@ -447,15 +509,15 @@ export function PriceInsightsPage({
           <div className="px-6 pb-6">
             {/* Simple Chart */}
             <div className="h-48 flex items-end gap-2 mb-4">
-              {trendData.map((data, i) => {
-                const height = ((data.price - minPrice) / (maxPrice - minPrice)) * 100;
+              {drawerTrendData.map((data, i) => {
+                const height = ((data.price - minPriceDrawer) / (maxPriceDrawer - minPriceDrawer)) * 100;
                 const isToday = data.day === "Today";
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-2">
                     <span className={cn("text-xs font-bold", isToday ? "text-primary" : "text-muted-foreground")}>
                       ₹{data.price}
                     </span>
-                    <div 
+                    <div
                       className={cn(
                         "w-full rounded-t-lg transition-all",
                         isToday ? "bg-primary" : "bg-primary/40"
@@ -469,20 +531,20 @@ export function PriceInsightsPage({
                 );
               })}
             </div>
-            
+
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4 p-4 rounded-xl bg-muted/50">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Week Low</p>
-                <p className="text-lg font-bold text-destructive">₹{minPrice}</p>
+                <p className="text-lg font-bold text-destructive">₹{minPriceDrawer}</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Week Avg</p>
-                <p className="text-lg font-bold text-foreground">₹{Math.round(trendData.reduce((a, b) => a + b.price, 0) / trendData.length)}</p>
+                <p className="text-lg font-bold text-foreground">₹{Math.round(drawerTrendData.reduce((a, b) => a + b.price, 0) / drawerTrendData.length)}</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Week High</p>
-                <p className="text-lg font-bold text-success">₹{maxPrice}</p>
+                <p className="text-lg font-bold text-success">₹{maxPriceDrawer}</p>
               </div>
             </div>
 
@@ -589,7 +651,7 @@ export function PriceInsightsPage({
             </p>
             <div className="space-y-3">
               {nearbyMandis.find(m => m.name === showBuyerConnect)?.buyers.map((buyer, i) => (
-                <div 
+                <div
                   key={i}
                   className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border hover:border-primary/50 transition-colors"
                 >

@@ -27,8 +27,15 @@ export function useProfile() {
 
   const fetchProfile = async () => {
     try {
+      // Skip if Supabase is not configured
+      if (!supabase) {
+        setProfile(null);
+        setIsLoading(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         setProfile(null);
         setIsLoading(false);
@@ -60,8 +67,13 @@ export function useProfile() {
 
   const updateProfile = async (updates: Partial<Omit<Profile, "id" | "user_id" | "created_at" | "updated_at">>) => {
     try {
+      // Skip if Supabase is not configured
+      if (!supabase) {
+        throw new Error("Supabase is not configured");
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         throw new Error("Not authenticated");
       }
@@ -92,6 +104,11 @@ export function useProfile() {
 
   useEffect(() => {
     fetchProfile();
+
+    // Skip auth listener if Supabase is not configured
+    if (!supabase) {
+      return;
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       fetchProfile();

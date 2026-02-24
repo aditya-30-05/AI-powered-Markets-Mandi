@@ -40,6 +40,28 @@ export interface PriceSummary {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export interface PriceTrendData {
+  date: string;
+  modalPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  volume: number;
+  confidence: number;
+}
+
+export interface TrendAnalysis {
+  direction: 'rising' | 'falling' | 'stable';
+  percentageChange: number;
+  volatility: 'low' | 'medium' | 'high';
+  recommendation: string;
+  confidence: number;
+  avgDailyChange?: number;
+  priceRange?: {
+    min: number;
+    max: number;
+  };
+}
+
 /**
  * Service to fetch real mandi prices from government open data
  */
@@ -47,7 +69,7 @@ export class MandiPriceService {
   private readonly BASE_URL = 'https://api.data.gov.in/resource';
   private readonly RESOURCE_ID = '9ef84268-d588-465a-a308-a864a43d0070'; // AGMARKNET commodity prices
   private readonly API_KEY = 'YOUR_API_KEY'; // In production, this would be from environment variables
-  
+
   // Commodity name mapping for better matching
   private readonly COMMODITY_MAPPING: Record<string, string[]> = {
     'tomato': ['Tomato', 'TOMATO', 'Tamatar'],
@@ -93,10 +115,10 @@ export class MandiPriceService {
     try {
       // For demo purposes, we'll use mock data that simulates the real API structure
       // In production, this would make actual API calls to data.gov.in
-      
+
       const mockData = await this.getMockMandiData(params);
       return mockData;
-      
+
       // Real API call would look like this:
       /*
       const queryParams = new URLSearchParams({
@@ -198,7 +220,7 @@ export class MandiPriceService {
     // Generate realistic mock data based on commodity
     const mockRecords: MandiPriceRecord[] = [];
     const markets = this.getMarketsForCommodity(commodity);
-    
+
     for (const market of markets.slice(0, params.limit || 20)) {
       const basePrice = this.getBasePriceForCommodity(commodity);
       const variation = 0.8 + Math.random() * 0.4; // ±20% variation
@@ -281,9 +303,9 @@ export class MandiPriceService {
 
   private filterByLocation(data: MandiPriceRecord[], location: string): MandiPriceRecord[] {
     const locationVariants = this.STATE_MAPPING[location] || [location];
-    
-    return data.filter(record => 
-      locationVariants.some(variant => 
+
+    return data.filter(record =>
+      locationVariants.some(variant =>
         record.state.toLowerCase().includes(variant.toLowerCase()) ||
         record.district.toLowerCase().includes(location) ||
         record.market.toLowerCase().includes(location)
@@ -294,13 +316,13 @@ export class MandiPriceService {
   private calculateModalPrice(prices: number[]): number {
     // Simple modal calculation - most frequent price range
     const priceRanges: Record<string, number> = {};
-    
+
     prices.forEach(price => {
       const range = Math.floor(price / 5) * 5; // Group by 5-rupee ranges
       priceRanges[range] = (priceRanges[range] || 0) + 1;
     });
 
-    const mostFrequentRange = Object.keys(priceRanges).reduce((a, b) => 
+    const mostFrequentRange = Object.keys(priceRanges).reduce((a, b) =>
       priceRanges[a] > priceRanges[b] ? a : b
     );
 
@@ -315,10 +337,10 @@ export class MandiPriceService {
 
   private formatRegionName(location: string, data: MandiPriceRecord[]): string {
     if (data.length === 0) return location;
-    
+
     const states = [...new Set(data.map(record => record.state))];
     const districts = [...new Set(data.map(record => record.district))];
-    
+
     if (states.length === 1 && districts.length <= 3) {
       return `${districts.join(', ')}, ${states[0]}`;
     } else if (states.length === 1) {
@@ -332,6 +354,140 @@ export class MandiPriceService {
     const normalized = commodity.toLowerCase().trim();
     const mapping = this.COMMODITY_MAPPING[normalized];
     return mapping ? mapping[0] : commodity;
+  }
+
+  /**
+   * Get historical price trends for a commodity
+   */
+  async getPriceTrends(
+    commodity: string,
+    location: string,
+    days: 7 | 30 = 7
+  ): Promise<PriceTrendData[]> {
+    try {
+      // In production, this would fetch actual historical data from AGMARKNET
+      // For now, we'll generate realistic mock trend data
+      return this.generateMockTrendData(commodity, location, days);
+    } catch (error) {
+      console.error('Failed to fetch price trends:', error);
+      return this.generateMockTrendData(commodity, location, days);
+    }
+  }
+
+  /**
+   * Generate mock historical trend data
+   */
+  private generateMockTrendData(
+    commodity: string,
+    location: string,
+    days: number
+  ): PriceTrendData[] {
+    const basePrice = this.getBasePriceForCommodity(commodity.toLowerCase());
+    const trends: PriceTrendData[] = [];
+    const today = new Date();
+
+    // Generate trend with realistic patterns
+    let currentPrice = basePrice * (0.85 + Math.random() * 0.15); // Start 85-100% of base
+    const trendDirection = Math.random() > 0.5 ? 1 : -1; // Rising or falling trend
+    const volatility = 0.05 + Math.random() * 0.05; // 5-10% daily volatility
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+
+      // Add trend + random walk
+      const trendChange = trendDirection * (0.01 + Math.random() * 0.02); // 1-3% trend
+      const randomChange = (Math.random() - 0.5) * volatility;
+      currentPrice = currentPrice * (1 + trendChange + randomChange);
+
+      // Ensure price stays within reasonable bounds
+      currentPrice = Math.max(basePrice * 0.7, Math.min(basePrice * 1.3, currentPrice));
+
+      const modalPrice = Math.round(currentPrice);
+      const minPrice = Math.round(modalPrice * 0.92);
+      const maxPrice = Math.round(modalPrice * 1.08);
+      const volume = Math.round(100 + Math.random() * 150); // 100-250 quintals
+
+      trends.push({
+        date: date.toISOString().split('T')[0],
+        modalPrice,
+        minPrice,
+        maxPrice,
+        volume,
+        confidence: 0.75 + Math.random() * 0.2 // 75-95% confidence
+      });
+    }
+
+    return trends;
+  }
+
+  /**
+   * Analyze price trend and generate insights
+   */
+  analyzeTrend(trendData: PriceTrendData[]): TrendAnalysis {
+    if (trendData.length < 2) {
+      return {
+        direction: 'stable',
+        percentageChange: 0,
+        volatility: 'low',
+        recommendation: 'Insufficient data for analysis',
+        confidence: 0.5
+      };
+    }
+
+    const firstPrice = trendData[0].modalPrice;
+    const lastPrice = trendData[trendData.length - 1].modalPrice;
+    const percentageChange = ((lastPrice - firstPrice) / firstPrice) * 100;
+
+    // Calculate volatility (standard deviation of daily changes)
+    const dailyChanges = [];
+    for (let i = 1; i < trendData.length; i++) {
+      const change = ((trendData[i].modalPrice - trendData[i - 1].modalPrice) / trendData[i - 1].modalPrice) * 100;
+      dailyChanges.push(change);
+    }
+    const avgChange = dailyChanges.reduce((a, b) => a + b, 0) / dailyChanges.length;
+    const variance = dailyChanges.reduce((sum, change) => sum + Math.pow(change - avgChange, 2), 0) / dailyChanges.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Determine trend direction
+    let direction: 'rising' | 'falling' | 'stable';
+    if (percentageChange > 3) direction = 'rising';
+    else if (percentageChange < -3) direction = 'falling';
+    else direction = 'stable';
+
+    // Determine volatility
+    let volatility: 'low' | 'medium' | 'high';
+    if (stdDev < 2) volatility = 'low';
+    else if (stdDev < 5) volatility = 'medium';
+    else volatility = 'high';
+
+    // Generate recommendation
+    let recommendation = '';
+    if (direction === 'rising' && volatility !== 'high') {
+      recommendation = `Prices have increased ${Math.abs(percentageChange).toFixed(1)}% in the last ${trendData.length} days. Consider selling within the next 2-3 days before potential correction.`;
+    } else if (direction === 'falling') {
+      recommendation = `Prices have decreased ${Math.abs(percentageChange).toFixed(1)}% recently. Consider waiting for market recovery or selling at current rates to avoid further losses.`;
+    } else if (volatility === 'high') {
+      recommendation = `Market is highly volatile. Wait for price stabilization or sell immediately if you need certainty.`;
+    } else {
+      recommendation = `Prices are stable with ${Math.abs(percentageChange).toFixed(1)}% change. Good time to sell at current market rates.`;
+    }
+
+    // Calculate confidence based on data quality
+    const avgConfidence = trendData.reduce((sum, d) => sum + d.confidence, 0) / trendData.length;
+
+    return {
+      direction,
+      percentageChange: parseFloat(percentageChange.toFixed(2)),
+      volatility,
+      recommendation,
+      confidence: avgConfidence,
+      avgDailyChange: parseFloat(avgChange.toFixed(2)),
+      priceRange: {
+        min: Math.min(...trendData.map(d => d.minPrice)),
+        max: Math.max(...trendData.map(d => d.maxPrice))
+      }
+    };
   }
 }
 

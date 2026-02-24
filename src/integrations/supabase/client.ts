@@ -8,10 +8,18 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+// Create a mock client if Supabase is not configured
+const createMockClient = () => {
+  console.warn('Supabase is not configured. Using mock client. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env file.');
+  return null as any;
+};
+
+export const supabase = (SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && !SUPABASE_URL.includes('placeholder'))
+  ? createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
+  })
+  : createMockClient();
