@@ -5,6 +5,7 @@
  * real commodity prices from AGMARKNET portal for accurate price discovery.
  */
 
+
 export interface MandiPriceRecord {
   state: string;
   district: string;
@@ -70,6 +71,16 @@ export class MandiPriceService {
   private readonly RESOURCE_ID = '9ef84268-d588-465a-a308-a864a43d0070'; // AGMARKNET commodity prices
   private readonly API_KEY = 'YOUR_API_KEY'; // In production, this would be from environment variables
 
+  private cache = new Map<
+  string,
+  {
+    data: MandiPriceRecord[];
+    expiry: number;
+  }
+>();
+
+private readonly CACHE_TTL = 90 * 1000; // 90 seconds
+
   // Commodity name mapping for better matching
   private readonly COMMODITY_MAPPING: Record<string, string[]> = {
     'tomato': ['Tomato', 'TOMATO', 'Tamatar'],
@@ -111,40 +122,63 @@ export class MandiPriceService {
   /**
    * Fetch real mandi prices from government open data API
    */
-  async fetchMandiPrices(params: PriceQueryParams): Promise<MandiPriceRecord[]> {
-    try {
-      // For demo purposes, we'll use mock data that simulates the real API structure
-      // In production, this would make actual API calls to data.gov.in
+  async fetchMandiPrices(
+  params: PriceQueryParams
+): Promise<MandiPriceRecord[]> {
+  const cacheKey = `latest_price:${
+    params.commodity || "all"
+  }:${params.state || "all"}:${
+    params.district || "all"
+  }:${params.market || "all"}`;
 
-      const mockData = await this.getMockMandiData(params);
-      return mockData;
+  const cached = this.cache.get(cacheKey);
 
-      // Real API call would look like this:
-      /*
-      const queryParams = new URLSearchParams({
-        'api-key': this.API_KEY,
-        format: 'json',
-        limit: (params.limit || 100).toString(),
-        filters: JSON.stringify({
-          commodity: this.mapCommodityName(params.commodity)
-        })
-      });
-
-      const response = await fetch(`${this.BASE_URL}/${this.RESOURCE_ID}?${queryParams}`);
-      
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return this.parseApiResponse(data);
-      */
-    } catch (error) {
-      console.error('Failed to fetch mandi prices:', error);
-      // Fallback to mock data if API fails
-      return this.getMockMandiData(params);
-    }
+  if (cached && cached.expiry > Date.now()) {
+    console.log(`[CACHE HIT] ${cacheKey}`);
+    return cached.data;
   }
+
+  console.log(`[CACHE MISS] ${cacheKey}`);
+
+  try {
+    const mockData = await this.getMockMandiData(params);
+
+    this.cache.set(cacheKey, {
+      data: mockData,
+      expiry: Date.now() + this.CACHE_TTL
+    });
+
+    return mockData;
+  } catch (error) {
+    console.error("Failed to fetch mandi prices:", error);
+
+    const fallbackData = await this.getMockMandiData(params);
+
+this.cache.set(cacheKey, {
+  data: fallbackData,
+  expiry: Date.now() + this.CACHE_TTL
+});
+
+return fallbackData;
+  }
+}
+
+  invalidatePriceCache(
+  commodity?: string,
+  state?: string,
+  district?: string,
+  market?: string
+): void {
+  const cacheKey = `latest_price:${
+    commodity || "all"
+  }:${state || "all"}:${
+    district || "all"
+  }:${market || "all"}`;
+
+  this.cache.delete(cacheKey);
+
+  console.log(`[CACHE INVALIDATED] ${cacheKey}`);
+}
 
   /**
    * Get price summary for a commodity in a specific region
