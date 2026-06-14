@@ -11,6 +11,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import AIDemo from "./pages/AIDemo";
 import GuidedVoiceDemo from "./pages/GuidedVoiceDemo";
+import ConnectToBuyers from './pages/ConnectToBuyers';
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ function AnimatedRoutes() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/ai-demo" element={<AIDemo />} />
         <Route path="/guided-voice-demo" element={<GuidedVoiceDemo />} />
+        <Route path="/connect-to-buyers" element={<ConnectToBuyers />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AnimatePresence>
