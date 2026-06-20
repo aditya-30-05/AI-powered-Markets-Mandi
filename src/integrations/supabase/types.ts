@@ -1,3 +1,8 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Prediction job status – mirrors the Postgres enum
+// ─────────────────────────────────────────────────────────────────────────
+export type PredictionStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
 export type Json =
   | string
   | number
@@ -14,6 +19,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      price_predictions: {
+        Row: {
+          id: string
+          job_id: string
+          user_id: string | null
+          symbol: string
+          location: string
+          quantity: string
+          vendor_language: string
+          buyer_message: string | null
+          prediction: Json | null
+          confidence: number | null
+          status: PredictionStatus
+          attempt_count: number
+          error_message: string | null
+          created_at: string
+          started_at: string | null
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          job_id?: string
+          user_id?: string | null
+          symbol: string
+          location: string
+          quantity?: string
+          vendor_language?: string
+          buyer_message?: string | null
+          prediction?: Json | null
+          confidence?: number | null
+          status?: PredictionStatus
+          attempt_count?: number
+          error_message?: string | null
+          created_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          job_id?: string
+          user_id?: string | null
+          symbol?: string
+          location?: string
+          quantity?: string
+          vendor_language?: string
+          buyer_message?: string | null
+          prediction?: Json | null
+          confidence?: number | null
+          status?: PredictionStatus
+          attempt_count?: number
+          error_message?: string | null
+          created_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -73,10 +135,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_next_prediction_job: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          job_id: string
+          user_id: string | null
+          symbol: string
+          location: string
+          quantity: string
+          vendor_language: string
+          buyer_message: string | null
+          prediction: Json | null
+          confidence: number | null
+          status: PredictionStatus
+          attempt_count: number
+          error_message: string | null
+          created_at: string
+          started_at: string | null
+          completed_at: string | null
+        }[]
+      }
+      mark_prediction_failed: {
+        Args: { p_job_id: string; p_error_msg: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      prediction_status: PredictionStatus
     }
     CompositeTypes: {
       [_ in never]: never

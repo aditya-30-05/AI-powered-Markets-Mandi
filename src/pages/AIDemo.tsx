@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, MessageSquare, Volume2, Languages, RefreshCw } from "lucide-react";
+import { ArrowLeft, Sparkles, MessageSquare, Volume2, Languages, RefreshCw, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMandiAI } from "@/hooks/useMandiAI";
+import { usePredictionJob } from "@/hooks/usePredictionJob";
 import { AIInsightsCard } from "@/components/AIInsightsCard";
 import { IndicTTSShowcase } from "@/components/IndicTTSShowcase";
 import { PageTransition } from "@/components/PageTransition";
@@ -67,21 +68,38 @@ export default function AIDemo() {
   });
   const [showCustomForm, setShowCustomForm] = useState(false);
 
+  // Legacy sync AI state (used for full result display)
   const { state: aiState, processRequest, reset } = useMandiAI();
+
+  // Async job queue state (Issue #11) — tracks job_id + status independently
+  const prediction = usePredictionJob();
+
   const supportedLanguages = getAllLanguages();
 
   const handleScenarioTest = async (scenario: typeof DEMO_SCENARIOS[0]) => {
     setSelectedScenario(scenario);
-    
+    const input = {
+      productName: scenario.productName,
+      location: scenario.location,
+      quantity: scenario.quantity,
+      vendorLanguage: scenario.vendorLanguage,
+      buyerMessage: scenario.buyerMessage
+    };
+
+    // ── Async path (Issue #11): queue the job and return job_id immediately ──
     try {
-      await processRequest({
-        productName: scenario.productName,
-        location: scenario.location,
-        quantity: scenario.quantity,
-        vendorLanguage: scenario.vendorLanguage,
-        buyerMessage: scenario.buyerMessage
+      const job = await prediction.submit(input);
+      toast({
+        title: "📦 Prediction Queued",
+        description: `Job ID: ${prediction.jobId ?? 'pending…'} — worker will process in background.`,
       });
-      
+    } catch {
+      // If Supabase is not configured, silently fall through to sync path
+    }
+
+    // ── Legacy sync path: still renders full result in AIInsightsCard ──
+    try {
+      await processRequest(input);
       toast({
         title: "AI Processing Complete",
         description: `Generated insights for ${scenario.title}`,
@@ -105,15 +123,26 @@ export default function AIDemo() {
       return;
     }
 
+    const input = {
+      productName: customInput.productName,
+      location: customInput.location || "Delhi",
+      quantity: customInput.quantity || "1 unit",
+      vendorLanguage: customInput.vendorLanguage,
+      buyerMessage: customInput.buyerMessage
+    };
+
+    // Async path
     try {
-      await processRequest({
-        productName: customInput.productName,
-        location: customInput.location || "Delhi",
-        quantity: customInput.quantity || "1 unit",
-        vendorLanguage: customInput.vendorLanguage,
-        buyerMessage: customInput.buyerMessage
+      await prediction.submit(input);
+      toast({
+        title: "📦 Prediction Queued",
+        description: `Job queued for ${customInput.productName}. Tracking in background.`,
       });
-      
+    } catch { /* no-op if Supabase unavailable */ }
+
+    // Legacy sync path
+    try {
+      await processRequest(input);
       toast({
         title: "Custom Test Complete",
         description: `Generated insights for ${customInput.productName}`,
@@ -129,6 +158,7 @@ export default function AIDemo() {
 
   const handleReset = () => {
     reset();
+    prediction.reset();
     setSelectedScenario(null);
     setShowCustomForm(false);
   };
@@ -347,6 +377,43 @@ export default function AIDemo() {
 
             {/* Right Column - Results */}
             <div className="space-y-6">
+
+              {/* ─── Async Job Status Badge (Issue #11) ─── */}
+              {prediction.status !== 'idle' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "glass-card px-4 py-3 flex items-center gap-3 text-sm",
+                    prediction.status === 'completed' && "border-green-500/30 bg-green-500/5",
+                    prediction.status === 'failed' && "border-destructive/30 bg-destructive/5",
+                    (prediction.status === 'pending' || prediction.status === 'processing') && "border-primary/30 bg-primary/5"
+                  )}
+                >
+                  {prediction.status === 'pending' && <Clock size={16} className="text-primary shrink-0" />}
+                  {prediction.status === 'processing' && <Loader2 size={16} className="text-primary animate-spin shrink-0" />}
+                  {prediction.status === 'completed' && <CheckCircle2 size={16} className="text-green-500 shrink-0" />}
+                  {prediction.status === 'failed' && <XCircle size={16} className="text-destructive shrink-0" />}
+
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-foreground capitalize">{prediction.status}</span>
+                    {prediction.jobId && (
+                      <span className="ml-2 text-xs text-muted-foreground font-mono">
+                        #{prediction.jobId.slice(0, 8)}…
+                      </span>
+                    )}
+                    {prediction.status === 'completed' && prediction.confidence != null && (
+                      <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                        ✔ Confidence: {(prediction.confidence * 100).toFixed(0)}%
+                      </span>
+                    )}
+                    {prediction.status === 'failed' && (
+                      <span className="ml-2 text-xs text-destructive">{prediction.error}</span>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
               {aiState.loading && (
                 <div className="glass-card p-8 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
