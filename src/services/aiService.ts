@@ -1,12 +1,17 @@
 /**
  * Multilingual Mandi AI Service
- * 
- * This service provides AI-driven price reasoning, multilingual translation,
- * and voice output for local Indian vendors using only free and open-source tools.
+ *
+ * After Issue #11 refactor:
+ *   - processVendorRequestAsync()  → queues a job, returns job_id immediately (NEW, preferred)
+ *   - processVendorRequest()       → legacy synchronous path (kept for backward compat)
+ *
+ * The API layer must NEVER call runPriceInference() directly.
+ * All inference runs exclusively in the background worker.
  */
 
 import { mandiPriceService, PriceSummary } from './mandiPriceService';
-import { indicTTSService, TTSResponse } from './indicTTSService';
+import { indicTTSService } from './indicTTSService';
+import { predictionTaskService, PredictionJobCreated } from './predictionTaskService';
 
 export interface ProductInput {
   productName: string;
@@ -70,8 +75,61 @@ export class MultilingualMandiAI {
     this.voiceService = new VoiceService();
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ASYNC PATH (Issue #11): Queue job, return immediately
+  // ─────────────────────────────────────────────────────────────────────────
+
   /**
-   * Process complete AI pipeline for vendor assistance
+   * Queue a prediction job and return job_id immediately.
+   *
+   * This is the PREFERRED entry point for all new code.
+   * No inference is performed in this method — it is guaranteed to
+   * return within a single DB round-trip.
+   *
+   * The background worker (supabase/functions/prediction-worker) picks up
+   * the job, runs inference, and stores the result in price_predictions.
+   *
+   * Use usePredictionJob() hook or predictionTaskService.subscribeToJob()
+   * to receive the result via Supabase Realtime push.
+   */
+  async processVendorRequestAsync(input: ProductInput): Promise<PredictionJobCreated> {
+    // 1. Handle translation in parallel (lightweight, no inference)
+    //    We still do this in-band because it is fast and stateless.
+    //    If translation also becomes heavy, it too can be queued.
+    const translationPromise = this.translationService.translate(
+      input.buyerMessage,
+      'en',
+      input.vendorLanguage,
+    );
+
+    // 2. Queue the price prediction job — returns immediately with job_id
+    const jobCreated = await predictionTaskService.createJob({
+      productName:    input.productName,
+      location:       input.location,
+      quantity:       input.quantity,
+      vendorLanguage: input.vendorLanguage,
+      buyerMessage:   input.buyerMessage,
+    });
+
+    // Allow translation to complete in background (non-blocking for caller)
+    translationPromise.catch((err) => {
+      console.warn('[MultilingualMandiAI] Background translation error:', err);
+    });
+
+    return jobCreated;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEGACY SYNC PATH: kept for backward compatibility
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * @deprecated Use processVendorRequestAsync() for production code.
+   *             This method runs inference in the calling thread, which
+   *             causes latency and blocks the UI event loop.
+   *
+   * Kept so existing pages (AIDemo, GuidedVoiceDemo) continue to work
+   * without modification during the migration period.
    */
   async processVendorRequest(input: ProductInput): Promise<AIResponse> {
     try {
